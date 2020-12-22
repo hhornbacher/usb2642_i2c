@@ -6,9 +6,13 @@ include:
 stages:
   - test
   - build
+  - publish
 
 test:
   extends: .rust_test
 
 build:
   extends: .rust_build
+
+publish:
+  extends: .rust_publish
