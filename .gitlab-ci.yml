@@ -9,8 +9,6 @@ stages:
 
 test:
   extends: .rust_test
-  stage: test
 
 build:
   extends: .rust_build
-  stage: build
