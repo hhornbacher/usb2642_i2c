@@ -13,7 +13,7 @@ use num_traits::ToPrimitive;
 
 pub type I2CAddress = u8;
 
-pub const SG_INTERFACE_ID_ORIG: u8 = 'S' as u8;
+pub const SG_INTERFACE_ID_ORIG: u8 = b'S';
 
 pub const SG_IO: u32 = 0x2285;
 
@@ -51,13 +51,7 @@ impl USB2642I2CWriteReadCommand {
         let i2c_write_addr = i2c_addr << 1;
         let i2c_read_addr = i2c_write_addr + 1;
 
-        let mut write_data_buffer = [0u8; 9];
-
-        for (i, b) in write_data.iter().enumerate() {
-            write_data_buffer[i] = *b;
-        }
-
-        Self {
+        let mut s = Self {
             scsi_vendor_command: USB2642_SCSI_OPCODE,
             scsi_vendor_action_write_read_i2c: USB2642_I2C_WRITE_READ_STREAM,
             i2c_write_slave_address: i2c_write_addr,
@@ -65,8 +59,14 @@ impl USB2642I2CWriteReadCommand {
             i2c_read_data_phase_length_high: ((read_len >> 8) & 0xff) as u8,
             i2c_read_data_phase_length_low: (read_len & 0xff) as u8,
             i2c_write_phase_length: write_data.len() as u8,
-            i2c_write_phase_payload: write_data_buffer,
+            i2c_write_phase_payload: Default::default(),
+        };
+
+        for (i, b) in (&write_data[..write_data.len()]).iter().enumerate() {
+            s.i2c_write_phase_payload[i] = *b;
         }
+
+        s
     }
 }
 
@@ -217,17 +217,17 @@ impl USB2642I2C {
     pub fn write_read(
         &mut self,
         i2c_addr: I2CAddress,
-        write_data: &mut [u8],
+        data: &[u8],
         read_len: usize,
-    ) -> Result<()> {
-        let read_data = [0u8; 512];
-        let command = USB2642I2CWriteReadCommand::new(i2c_addr, write_data, read_len);
-        let sgio = SgIoHdr::new(
-            command,
-            SgDxfer::FromDev,
-            write_data.len(),
-            write_data.as_mut_ptr(),
-        );
-        sg_ioctl(self.sg_fd, &sgio)
+    ) -> Result<Vec<u8>> {
+        let command = USB2642I2CWriteReadCommand::new(i2c_addr, data, read_len);
+
+        let mut out_buffer = [0u8; 9];
+
+        let sgio = SgIoHdr::new(command, SgDxfer::FromDev, read_len, out_buffer.as_mut_ptr());
+
+        sg_ioctl(self.sg_fd, &sgio)?;
+
+        Ok((&out_buffer[..read_len]).to_vec())
     }
 }
