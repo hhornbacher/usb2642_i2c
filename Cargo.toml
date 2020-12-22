@@ -1,0 +1,17 @@
+[package]
+authors = ["Harry Hornbacher <dev@harry-hornbacher.de>"]
+description = """
+A Rust library for interfacing with the USB2642 I2C bus using the linux sg3 SCSI interface.
+"""
+documentation = "https://docs.rs/usb2642_i2c"
+edition = "2018"
+keywords = ["usb2642", "i2c", "linux"]
+license = "MIT"
+name = "usb2642-i2c"
+readme = "README.md"
+repository = "https://github.com/hhornbacher/usb2642_i2c"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
