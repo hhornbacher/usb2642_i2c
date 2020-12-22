@@ -210,9 +210,7 @@ impl USB2642I2C {
 
     pub fn write(&mut self, i2c_addr: I2CAddress, data: &mut [u8]) -> Result<()> {
         let command = USB2642I2CWriteCommand::new(i2c_addr, data.len());
-        println!("Command:\n{:?}", command);
         let sgio = SgIoHdr::new(command, SgDxfer::ToDev, data.len(), data.as_mut_ptr());
-        println!("SgIoHdr:\n{:?}", sgio);
         sg_ioctl(self.sg_fd, &sgio)
     }
 
