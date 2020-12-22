@@ -20,3 +20,6 @@ version = "0.1.0"
 nix = "0.19"
 num-derive = "0.2"
 num-traits = "0.2"
+
+[dev-dependencies]
+bitflags = "0.8"
