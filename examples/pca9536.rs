@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate bitflags;
 
+use std::{thread::sleep, time::Duration};
+
 use num_derive::ToPrimitive;
 use num_traits::ToPrimitive;
 
@@ -52,7 +54,7 @@ impl PCA9536 {
     }
 
     pub fn read_register(&mut self, register: Register) -> u8 {
-        let data = vec![register.to_u8().unwrap()];
+        let data = [register.to_u8().unwrap()];
         let data = self.usb2642.write_read(I2C_ADDRESS, &data, 1).unwrap();
         data[0]
     }
@@ -90,11 +92,13 @@ fn main() {
         "Output port register: {:#02x}",
         pca9536.read_register(Register::OutputPort)
     );
+    sleep(Duration::from_secs(2));
     pca9536.output_values(GPIO0 | GPIO2);
     println!(
         "Output port register: {:#02x}",
         pca9536.read_register(Register::OutputPort)
     );
+    sleep(Duration::from_secs(2));
     pca9536.output_values(GPIO_ALL);
     println!(
         "Output port register: {:#02x}",
