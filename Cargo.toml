@@ -6,6 +6,9 @@ A Rust library for interfacing with the USB2642 I2C bus using the linux sg3 SCSI
 """
 documentation = "https://docs.rs/usb2642_i2c"
 edition = "2018"
+exclude = [
+  "cargo/*",
+]
 keywords = ["usb2642", "i2c", "linux"]
 license = "MIT"
 name = "usb2642-i2c"
