@@ -13,9 +13,9 @@ let usb2642 = USB2642I2C::open("/dev/sg0").unwrap();
 
 // Write-Only
 let mut write_data = [0x01u8, 0x02u8];
-self.usb2642.write(I2C_ADDRESS, &mut data).unwrap();
+usb2642.write(I2C_ADDRESS, &mut data).unwrap();
 
 // Write-Read
 let write_data = [register.to_u8().unwrap()];
-let read_data = self.usb2642.write_read(I2C_ADDRESS, &data, 1).unwrap();
+let read_data = usb2642.write_read(I2C_ADDRESS, &data, 1).unwrap();
 ```
