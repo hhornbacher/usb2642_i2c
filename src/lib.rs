@@ -1,9 +1,26 @@
+//! A Rust library for interfacing with the USB2642 I2C bus using the linux sg3 SCSI interface.
+//!
+//!
+//! ## Usage example
+//!
+//! ```rust
+//! let usb2642 = USB2642I2C::open("/dev/sg0").unwrap();
+//!
+//! // Write-Only
+//! let mut write_data = [0x01u8, 0x02u8];
+//! usb2642.write(I2C_ADDRESS, &mut data).unwrap();
+//!
+//! // Write-Read
+//! let write_data = [register.to_u8().unwrap()];
+//! let read_data = usb2642.write_read(I2C_ADDRESS, &data, 1).unwrap();
+//! ```
+
 #[macro_use]
 extern crate nix;
 
 use std::{
     fs::OpenOptions,
-    io::Result,
+    io::{Error, ErrorKind, Result},
     os::unix::io::{IntoRawFd, RawFd},
 };
 
@@ -17,9 +34,8 @@ pub const SG_INTERFACE_ID_ORIG: u8 = b'S';
 
 pub const SG_IO: u32 = 0x2285;
 
-// Use negative values to flag difference from original sg_header structure
 #[derive(ToPrimitive)]
-pub enum SgDxfer {
+pub enum DataTransferDirection {
     ToDev = -2,
     FromDev = -3,
 }
@@ -44,9 +60,15 @@ pub struct USB2642I2CWriteReadCommand {
 }
 
 impl USB2642I2CWriteReadCommand {
-    pub fn new(i2c_addr: u8, write_data: &[u8], read_len: usize) -> Self {
-        assert!(read_len < 512);
-        assert!(write_data.len() < 9);
+    pub fn new(i2c_addr: u8, write_data: &[u8], read_len: usize) -> Result<Self> {
+        if read_len > 9 {
+            return Err(Error::new(ErrorKind::InvalidInput, "read_len > 9 bytes"));
+        } else if write_data.len() > 9 {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "write_data.len() > 9 bytes",
+            ));
+        }
 
         let i2c_write_addr = i2c_addr << 1;
         let i2c_read_addr = i2c_write_addr + 1;
@@ -66,7 +88,7 @@ impl USB2642I2CWriteReadCommand {
             s.i2c_write_phase_payload[i] = *b;
         }
 
-        s
+        Ok(s)
     }
 }
 
@@ -86,76 +108,93 @@ pub struct USB2642I2CWriteCommand {
 }
 
 impl USB2642I2CWriteCommand {
-    pub fn new(i2c_addr: u8, data_len: usize) -> Self {
-        assert!(data_len < 512);
+    pub fn new(i2c_addr: u8, write_data: &[u8]) -> Result<Self> {
+        if write_data.len() > 9 {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "write_data.len() > 9 bytes",
+            ));
+        }
 
         let i2c_write_addr = i2c_addr << 1;
 
-        Self {
+        let mut s = Self {
             scsi_vendor_command: USB2642_SCSI_OPCODE,
             scsi_vendor_action_write_i2c: USB2642_I2C_WRITE_STREAM,
             i2c_slave_address: i2c_write_addr,
             i2c_unused: 0,
-            i2c_data_phase_length_high: ((data_len >> 8) & 0xff) as u8,
-            i2c_data_phase_length_low: (data_len & 0xff) as u8,
-            i2c_command_phase_length: 0,
+            i2c_data_phase_length_high: 0u8,
+            i2c_data_phase_length_low: 0u8,
+            i2c_command_phase_length: write_data.len() as u8,
             i2c_command_phase_payload: Default::default(),
+        };
+
+        for (i, b) in (&write_data[..write_data.len()]).iter().enumerate() {
+            s.i2c_command_phase_payload[i] = *b;
         }
+
+        Ok(s)
     }
 }
+
 impl USB2642I2CCommand for USB2642I2CWriteCommand {}
 
 #[derive(Debug)]
 #[repr(C)]
 pub struct SgIoHdr<CMD: USB2642I2CCommand> {
-    // [i] 'S' for SCSI generic (required)
+    /// [i] 'S' for SCSI generic (required)
     interface_id: i32,
-    // [i] data transfer direction
+    /// [i] data transfer direction
     dxfer_direction: i32,
-    // [i] SCSI command length
+    /// [i] SCSI command length
     cmd_len: u8,
-    // [i] max length to write to sbp
+    /// [i] max length to write to sbp
     mx_sb_len: u8,
-    // [i] 0 implies no scatter gather
+    /// [i] 0 implies no scatter gather
     iovec_count: u16,
-    // [i] byte count of data transfer
+    /// [i] byte count of data transfer
     dxfer_len: u32,
-    // [i], [*io] points to data transfer memory or scatter gather list
+    /// [i], [*io] points to data transfer memory or scatter gather list
     dxferp: *mut u8,
-    // [i], [*i] points to command to perform
+    /// [i], [*i] points to command to perform
     cmdp: *mut CMD,
-    // [i], [*o] points to sense_buffer memory
+    /// [i], [*o] points to sense_buffer memory
     sbp: *mut u8,
-    // [i] MAX_UINT->no timeout (unit: millisec)
+    /// [i] MAX_UINT->no timeout (unit: millisec)
     timeout: u32,
-    // [i] 0 -> default, see SG_FLAG...
+    /// [i] 0 -> default, see SG_FLAG...
     flags: u32,
-    // [i->o] unused internally (normally)
+    /// [i->o] unused internally (normally)
     pack_id: i32,
-    // [i->o] unused internally
+    /// [i->o] unused internally
     usr_ptr: *const u8,
-    // [o] scsi status
+    /// [o] scsi status
     status: u8,
-    // [o] shifted, masked scsi status
+    /// [o] shifted, masked scsi status
     masked_status: u8,
-    // [o] messaging level data (optional)
+    /// [o] messaging level data (optional)
     msg_status: u8,
-    // [o] byte count actually written to sbp
+    /// [o] byte count actually written to sbp
     sb_len_wr: u8,
-    // [o] errors from host adapter
+    /// [o] errors from host adapter
     host_status: u16,
-    // [o] errors from software driver
+    /// [o] errors from software driver
     driver_status: u16,
-    // [o] dxfer_len - actual_transferred
+    /// [o] dxfer_len - actual_transferred
     resid: i32,
-    // [o] time taken by cmd (unit: millisec)
+    /// [o] time taken by cmd (unit: millisec)
     duration: u32,
-    // [o] auxiliary information
+    /// [o] auxiliary information
     info: u32,
 }
 
 impl<CMD: USB2642I2CCommand> SgIoHdr<CMD> {
-    pub fn new(mut command: CMD, sg_dxfer: SgDxfer, data_len: usize, data_buffer: *mut u8) -> Self {
+    pub fn new(
+        mut command: CMD,
+        sg_dxfer: DataTransferDirection,
+        data_buffer: *mut u8,
+        data_len: usize,
+    ) -> Self {
         let mut sense = [0u8; 64];
         Self {
             interface_id: 'S' as i32,
@@ -184,15 +223,6 @@ impl<CMD: USB2642I2CCommand> SgIoHdr<CMD> {
     }
 }
 
-pub fn sg_ioctl<CMD: USB2642I2CCommand>(sg_raw_fd: RawFd, sg_io_hdr: &SgIoHdr<CMD>) -> Result<()> {
-    if let Err(e) =
-        unsafe { convert_ioctl_res!(ioctl(sg_raw_fd, SG_IO as ioctl_num_type, sg_io_hdr)) }
-    {
-        return Err(std::io::Error::new(std::io::ErrorKind::Other, e));
-    }
-    Ok(())
-}
-
 pub struct USB2642I2C {
     sg_fd: RawFd,
 }
@@ -208,10 +238,24 @@ impl USB2642I2C {
         })
     }
 
+    fn sg_ioctl<CMD: USB2642I2CCommand>(&self, sg_io_hdr: &SgIoHdr<CMD>) -> Result<()> {
+        if let Err(e) =
+            unsafe { convert_ioctl_res!(ioctl(self.sg_fd, SG_IO as ioctl_num_type, sg_io_hdr)) }
+        {
+            return Err(Error::new(ErrorKind::Other, e));
+        }
+        Ok(())
+    }
+
     pub fn write(&mut self, i2c_addr: I2CAddress, data: &mut [u8]) -> Result<()> {
-        let command = USB2642I2CWriteCommand::new(i2c_addr, data.len());
-        let sgio = SgIoHdr::new(command, SgDxfer::ToDev, data.len(), data.as_mut_ptr());
-        sg_ioctl(self.sg_fd, &sgio)
+        let command = USB2642I2CWriteCommand::new(i2c_addr, data)?;
+        let sgio = SgIoHdr::new(
+            command,
+            DataTransferDirection::ToDev,
+            std::ptr::null_mut(),
+            0,
+        );
+        self.sg_ioctl(&sgio)
     }
 
     pub fn write_read(
@@ -220,13 +264,18 @@ impl USB2642I2C {
         data: &[u8],
         read_len: usize,
     ) -> Result<Vec<u8>> {
-        let command = USB2642I2CWriteReadCommand::new(i2c_addr, data, read_len);
+        let command = USB2642I2CWriteReadCommand::new(i2c_addr, data, read_len)?;
 
         let mut out_buffer = [0u8; 9];
 
-        let sgio = SgIoHdr::new(command, SgDxfer::FromDev, read_len, out_buffer.as_mut_ptr());
+        let sgio = SgIoHdr::new(
+            command,
+            DataTransferDirection::FromDev,
+            out_buffer.as_mut_ptr(),
+            read_len,
+        );
 
-        sg_ioctl(self.sg_fd, &sgio)?;
+        self.sg_ioctl(&sgio)?;
 
         Ok((&out_buffer[..read_len]).to_vec())
     }
