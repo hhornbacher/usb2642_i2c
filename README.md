@@ -9,7 +9,9 @@ A Rust library for interfacing with the USB2642 I2C bus using the linux sg3 SCSI
 ## Usage
 
 ```rust
-let usb2642 = USB2642I2C::open("/dev/sg0").unwrap();
+const I2C_ADDRESS: I2CAddress = 0x12;
+
+let mut usb2642 = USB2642I2C::open("/dev/sg0").unwrap();
 
 // Write-Only
 let mut write_data = [0x01u8, 0x02u8];

@@ -4,15 +4,19 @@
 //! ## Usage example
 //!
 //! ```rust
-//! let usb2642 = USB2642I2C::open("/dev/sg0").unwrap();
+//! use usb2642_i2c::{USB2642I2C, I2CAddress};
 //!
-//! // Write-Only
-//! let mut write_data = [0x01u8, 0x02u8];
-//! usb2642.write(I2C_ADDRESS, &mut data).unwrap();
+//! const I2C_ADDRESS: I2CAddress = 0x12;
 //!
-//! // Write-Read
-//! let write_data = [register.to_u8().unwrap()];
-//! let read_data = usb2642.write_read(I2C_ADDRESS, &data, 1).unwrap();
+//! if let Ok(mut usb2642) = USB2642I2C::open("/dev/sg0") {
+//!   // Write-Only
+//!   let mut write_data = [0x01, 0x02];
+//!   usb2642.write(I2C_ADDRESS, &mut write_data).unwrap();
+//!
+//!   // Write-Read
+//!   let write_data = [0x02];
+//!   let read_data = usb2642.write_read(I2C_ADDRESS, &write_data, 1).unwrap();
+//! }
 //! ```
 
 #[macro_use]
