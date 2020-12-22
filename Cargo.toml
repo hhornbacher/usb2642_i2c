@@ -14,9 +14,12 @@ license = "MIT"
 name = "usb2642-i2c"
 readme = "README.md"
 repository = "https://github.com/hhornbacher/usb2642_i2c"
-version = "0.1.0"
+version = "0.1.1"
 
 [dependencies]
 nix = "0.19"
 num-derive = "0.2"
 num-traits = "0.2"
+
+[dev-dependencies]
+bitflags = "0.8"
