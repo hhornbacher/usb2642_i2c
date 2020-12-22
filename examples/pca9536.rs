@@ -8,7 +8,7 @@ use usb2642_i2c::USB2642I2C;
 
 const I2C_ADDRESS: u8 = 0x41;
 
-#[derive(ToPrimitive)]
+#[derive(ToPrimitive, Debug)]
 pub enum Register {
     InputPort = 0,
     OutputPort = 1,
@@ -27,7 +27,7 @@ bitflags! {
     }
 }
 
-#[derive(ToPrimitive)]
+#[derive(ToPrimitive, Debug)]
 pub enum Direction {
     Output = 0,
     Input = 1,
@@ -47,8 +47,14 @@ impl PCA9536 {
     }
 
     fn write_register(&mut self, register: Register, value: u8) {
-        let mut payload = [register.to_u8().unwrap(), value];
-        self.usb2642.write(I2C_ADDRESS, &mut payload).unwrap();
+        let mut data = [register.to_u8().unwrap(), value];
+        self.usb2642.write(I2C_ADDRESS, &mut data).unwrap();
+    }
+
+    pub fn read_register(&mut self, register: Register) -> u8 {
+        let data = vec![register.to_u8().unwrap()];
+        let data = self.usb2642.write_read(I2C_ADDRESS, &data, 1).unwrap();
+        data[0]
     }
 
     pub fn set_pins_direction(&mut self, pins: GpioPin, direction: Direction) {
@@ -74,5 +80,24 @@ fn main() {
     let mut pca9536 = PCA9536::new(usb2642);
 
     pca9536.set_pins_direction(GPIO_ALL, Direction::Output);
+
+    println!(
+        "Output port register: {:#02x}",
+        pca9536.read_register(Register::OutputPort)
+    );
+    pca9536.output_values(GPIO_NONE);
+    println!(
+        "Output port register: {:#02x}",
+        pca9536.read_register(Register::OutputPort)
+    );
     pca9536.output_values(GPIO0 | GPIO2);
+    println!(
+        "Output port register: {:#02x}",
+        pca9536.read_register(Register::OutputPort)
+    );
+    pca9536.output_values(GPIO_ALL);
+    println!(
+        "Output port register: {:#02x}",
+        pca9536.read_register(Register::OutputPort)
+    );
 }
